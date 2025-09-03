@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "build"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/static/(.*)",
+      "dest": "/static/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ],
+  "env": {
+    "NPM_CONFIG_LEGACY_PEER_DEPS": "true",
+    "NPM_CONFIG_FORCE": "true",
+    "SKIP_PREFLIGHT_CHECK": "true",
+    "NODE_OPTIONS": "--openssl-legacy-provider",
+    "GENERATE_SOURCEMAP": "false"
+  },
+  "buildCommand": "npm install --legacy-peer-deps --force && npm run build"
+}
