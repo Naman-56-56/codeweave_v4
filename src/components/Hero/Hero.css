@@ -9,6 +9,16 @@
   padding-top: 100px; /* Move hero content higher up */
 }
 
+/* Animation for 3D fallback */
+@keyframes slide {
+  from {
+    transform: translateX(-20px);
+  }
+  to {
+    transform: translateX(20px);
+  }
+}
+
 /* Video Background Styles */
 .video-background {
   position: absolute;
