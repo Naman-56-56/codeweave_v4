@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 interface Model3DProps {
   modelUrl: string;
@@ -18,10 +17,6 @@ const Model3D: React.FC<Model3DProps> = ({ modelUrl }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  // CSS fallback state (always declare hooks at top level)
-  const [rotation, setRotation] = useState({ x: 0, y: 0 });
-  const cssAnimationRef = useRef<number>();
 
   // Track mouse movement
   const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -135,45 +130,50 @@ const Model3D: React.FC<Model3DProps> = ({ modelUrl }) => {
         return group;
       };
 
-      // Try to load GLTF model
+      // Try to load GLTF model, but use fallback if GLTFLoader is not available
       try {
-        const loader = new GLTFLoader();
-        
-        loader.load(
-          modelUrl,
-          (gltf: any) => {
-            const model = gltf.scene;
-            model.position.set(0, -1, 0);
-            model.scale.setScalar(2);
-            
-            // Enable shadows for the model
-            model.traverse((child: any) => {
-              if (child.isMesh) {
-                child.castShadow = true;
-                child.receiveShadow = true;
-              }
-            });
+        // Check if GLTFLoader exists (it might not be available in production)
+        if ((THREE as any).GLTFLoader) {
+          const loader = new (THREE as any).GLTFLoader();
+          
+          loader.load(
+            modelUrl,
+            (gltf: any) => {
+              const model = gltf.scene;
+              model.position.set(0, -1, 0);
+              model.scale.setScalar(2);
+              
+              // Enable shadows for the model
+              model.traverse((child: any) => {
+                if (child.isMesh) {
+                  child.castShadow = true;
+                  child.receiveShadow = true;
+                }
+              });
 
-            scene.add(model);
-            modelRef.current = model;
-            setIsLoaded(true);
-            setError(null);
-          },
-          (progress: any) => {
-            console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
-          },
-          (error: any) => {
-            console.error('Error loading GLTF model:', error);
-            // Use fallback
-            const fallbackModel = createFallbackModel();
-            scene.add(fallbackModel);
-            modelRef.current = fallbackModel;
-            setIsLoaded(true);
-            setError(null);
-          }
-        );
+              scene.add(model);
+              modelRef.current = model;
+              setIsLoaded(true);
+              setError(null);
+            },
+            (progress: any) => {
+              console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
+            },
+            (error: any) => {
+              console.error('Error loading GLTF model:', error);
+              // Use fallback
+              const fallbackModel = createFallbackModel();
+              scene.add(fallbackModel);
+              modelRef.current = fallbackModel;
+              setIsLoaded(true);
+              setError(null);
+            }
+          );
+        } else {
+          throw new Error('GLTFLoader not available');
+        }
       } catch (err) {
-        console.log('GLTF loading error, using fallback geometry:', err);
+        console.log('GLTF loading not available, using fallback geometry');
         // Use fallback geometry
         const fallbackModel = createFallbackModel();
         scene.add(fallbackModel);
@@ -251,30 +251,30 @@ const Model3D: React.FC<Model3DProps> = ({ modelUrl }) => {
     }
   }, [mousePosition, isHovered, modelUrl]);
 
-  // CSS fallback animation (always runs, but only visible when error occurs)
-  useEffect(() => {
-    const animate = () => {
-      const time = Date.now() * 0.001;
-      setRotation({
-        x: mousePosition.y * 15 + Math.sin(time) * 5,
-        y: mousePosition.x * 15 + time * 10
-      });
-      cssAnimationRef.current = requestAnimationFrame(animate);
-    };
-    
-    if (error) {
-      cssAnimationRef.current = requestAnimationFrame(animate);
-    }
-    
-    return () => {
-      if (cssAnimationRef.current) {
-        cancelAnimationFrame(cssAnimationRef.current);
-      }
-    };
-  }, [mousePosition, error]);
-
   // CSS fallback for when Three.js fails completely
   if (error) {
+    const [rotation, setRotation] = useState({ x: 0, y: 0 });
+    const animationRef = useRef<number>();
+
+    useEffect(() => {
+      const animate = () => {
+        const time = Date.now() * 0.001;
+        setRotation({
+          x: mousePosition.y * 15 + Math.sin(time) * 5,
+          y: mousePosition.x * 15 + time * 10
+        });
+        animationRef.current = requestAnimationFrame(animate);
+      };
+      
+      animationRef.current = requestAnimationFrame(animate);
+      
+      return () => {
+        if (animationRef.current) {
+          cancelAnimationFrame(animationRef.current);
+        }
+      };
+    }, [mousePosition]);
+
     return (
       <div
         style={{
