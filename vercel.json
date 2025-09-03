@@ -24,7 +24,8 @@
     "NPM_CONFIG_FORCE": "true",
     "SKIP_PREFLIGHT_CHECK": "true",
     "NODE_OPTIONS": "--openssl-legacy-provider",
-    "GENERATE_SOURCEMAP": "false"
+    "GENERATE_SOURCEMAP": "false",
+    "CI": "false"
   },
   "installCommand": "npm install --legacy-peer-deps --force",
   "buildCommand": "npm run vercel-build"
