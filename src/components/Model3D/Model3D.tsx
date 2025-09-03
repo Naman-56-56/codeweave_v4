@@ -3,20 +3,40 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useGLTF, OrbitControls, Environment, ContactShadows } from '@react-three/drei';
 import * as THREE from 'three';
 
+// Safe lerp function that handles undefined cases
+const safeLerp = (current: number, target: number, factor: number): number => {
+  if (typeof current !== 'number' || typeof target !== 'number' || typeof factor !== 'number') {
+    return target;
+  }
+  return current + (target - current) * factor;
+};
+
 interface ModelProps {
   url: string;
   mousePosition: { x: number; y: number };
   isHovered: boolean;
+  onError?: () => void;
 }
 
-function Model({ url, mousePosition, isHovered }: ModelProps) {
-  const { scene } = useGLTF(url);
+function Model({ url, mousePosition, isHovered, onError }: ModelProps) {
   const modelRef = useRef<THREE.Group>(null);
   const { viewport } = useThree();
+  const [hasError, setHasError] = useState(false);
 
-  // Interactive animation based on cursor position
+  // Always call useGLTF hook - this must be at the top level
+  const gltf = useGLTF(url);
+
+  // Effect to handle errors
+  React.useEffect(() => {
+    if (!gltf || !gltf.scene) {
+      setHasError(true);
+      if (onError) onError();
+    }
+  }, [gltf, onError]);
+
+  // Interactive animation based on cursor position - always call useFrame
   useFrame((state) => {
-    if (modelRef.current) {
+    if (modelRef.current && state.clock && gltf && gltf.scene && !hasError) {
       // Base rotation
       const baseRotationY = Math.sin(state.clock.elapsedTime * 0.3) * 0.1;
       
@@ -24,14 +44,14 @@ function Model({ url, mousePosition, isHovered }: ModelProps) {
       const targetRotationY = (mousePosition.x / viewport.width) * Math.PI * 0.3;
       const targetRotationX = -(mousePosition.y / viewport.height) * Math.PI * 0.2;
       
-      // Smooth interpolation towards target rotation
-      modelRef.current.rotation.y = THREE.MathUtils.lerp(
+      // Safe interpolation towards target rotation
+      modelRef.current.rotation.y = safeLerp(
         modelRef.current.rotation.y, 
         baseRotationY + targetRotationY, 
         0.02
       );
       
-      modelRef.current.rotation.x = THREE.MathUtils.lerp(
+      modelRef.current.rotation.x = safeLerp(
         modelRef.current.rotation.x, 
         targetRotationX, 
         0.02
@@ -40,19 +60,24 @@ function Model({ url, mousePosition, isHovered }: ModelProps) {
       // Scale animation when hovered
       const targetScale = isHovered ? 1.7 : 1.5;
       const currentScale = modelRef.current.scale.x;
-      const newScale = THREE.MathUtils.lerp(currentScale, targetScale, 0.03);
+      const newScale = safeLerp(currentScale, targetScale, 0.03);
       
       modelRef.current.scale.set(newScale, newScale, newScale);
       
       // Subtle floating motion
-      modelRef.current.position.y = 0.1 + Math.sin(state.clock.elapsedTime * 0.8) * 0.1;
+      modelRef.current.position.y = -0.1 + Math.sin(state.clock.elapsedTime * 0.8) * 0.1;
     }
   });
+
+  // Return null if there's an error or no scene
+  if (hasError || !gltf || !gltf.scene) {
+    return null;
+  }
 
   return (
     <group ref={modelRef}>
       <primitive 
-        object={scene} 
+        object={gltf.scene} 
         scale={[1.5, 1.5, 1.5]} 
         position={[0, -0.1, 0]}
       />
@@ -69,6 +94,32 @@ function LoadingFallback() {
   );
 }
 
+// Simple fallback for when GLTF fails to load
+function SimpleFallback() {
+  const meshRef = useRef<THREE.Mesh>(null);
+  
+  useFrame((state) => {
+    if (meshRef.current) {
+      meshRef.current.rotation.y = state.clock.elapsedTime * 0.2;
+      meshRef.current.position.y = Math.sin(state.clock.elapsedTime) * 0.1;
+    }
+  });
+
+  return (
+    <mesh ref={meshRef} position={[0, 0, 0]} scale={[1.5, 1.5, 1.5]}>
+      <icosahedronGeometry args={[1, 2]} />
+      <meshStandardMaterial 
+        color="#667eea" 
+        wireframe={false}
+        transparent
+        opacity={0.8}
+        metalness={0.3}
+        roughness={0.4}
+      />
+    </mesh>
+  );
+}
+
 interface Model3DProps {
   modelUrl: string;
 }
@@ -76,6 +127,7 @@ interface Model3DProps {
 const Model3D: React.FC<Model3DProps> = ({ modelUrl }) => {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [isHovered, setIsHovered] = useState(false);
+  const [useSimpleFallback, setUseSimpleFallback] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Track mouse movement
@@ -92,6 +144,12 @@ const Model3D: React.FC<Model3DProps> = ({ modelUrl }) => {
   const handleMouseLeave = () => {
     setIsHovered(false);
     setMousePosition({ x: 0, y: 0 }); // Reset to center when mouse leaves
+  };
+
+  // Error handler for GLTF loading
+  const handleError = () => {
+    console.warn('GLTF model failed to load, using simple fallback');
+    setUseSimpleFallback(true);
   };
 
   return (
@@ -155,11 +213,16 @@ const Model3D: React.FC<Model3DProps> = ({ modelUrl }) => {
 
         {/* 3D Model */}
         <Suspense fallback={<LoadingFallback />}>
-          <Model 
-            url={modelUrl} 
-            mousePosition={mousePosition}
-            isHovered={isHovered}
-          />
+          {useSimpleFallback ? (
+            <SimpleFallback />
+          ) : (
+            <Model 
+              url={modelUrl} 
+              mousePosition={mousePosition}
+              isHovered={isHovered}
+              onError={handleError}
+            />
+          )}
         </Suspense>
 
         {/* Camera controls - disable auto rotation when interacting */}
