@@ -26,5 +26,6 @@
     "NODE_OPTIONS": "--openssl-legacy-provider",
     "GENERATE_SOURCEMAP": "false"
   },
-  "buildCommand": "npm install --legacy-peer-deps --force && npm run build"
+  "installCommand": "npm install --legacy-peer-deps --force",
+  "buildCommand": "npm run build"
 }
